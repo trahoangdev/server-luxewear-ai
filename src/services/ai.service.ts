@@ -5,6 +5,7 @@
  */
 
 import { geminiApi, GeminiApiIntegration } from "../integrations/gemini.api";
+import { getOpenAIApi, OpenAIApiIntegration } from "../integrations/openai.api";
 import logger from "../config/logger";
 import {
   handleAsyncOperationStrict,
@@ -24,16 +25,46 @@ import type {
 } from "../types";
 
 /**
+ * AI Provider type - determines which API to use for text generation
+ */
+export type AIProvider = "gemini" | "openai";
+
+/**
+ * Common interface for AI API integrations
+ */
+type AIApiIntegration = GeminiApiIntegration | OpenAIApiIntegration;
+
+/**
  * AI Service Class
  * Service layer for AI operations with business logic and data persistence
  */
 export class AIService {
-  private geminiApi: GeminiApiIntegration;
+  private api: AIApiIntegration;
+  private provider: AIProvider;
   private config: AIServiceConfig;
   private requestCount = 0;
 
-  constructor(geminiInstance?: GeminiApiIntegration, config: AIServiceConfig = {}) {
-    this.geminiApi = geminiInstance || geminiApi;
+  constructor(apiInstance?: AIApiIntegration, config: AIServiceConfig = {}) {
+    // Determine provider: env var > available API key > gemini fallback
+    const envProvider = (process.env.AI_PROVIDER || "").toLowerCase();
+
+    if (apiInstance) {
+      this.api = apiInstance;
+      this.provider = apiInstance instanceof OpenAIApiIntegration ? "openai" : "gemini";
+    } else if (envProvider === "openai" || (!envProvider && !process.env.GEMINI_API_KEY && process.env.OPENAI_API_KEY)) {
+      const openaiApi = getOpenAIApi();
+      if (openaiApi) {
+        this.api = openaiApi;
+        this.provider = "openai";
+      } else {
+        this.api = geminiApi;
+        this.provider = "gemini";
+      }
+    } else {
+      this.api = geminiApi;
+      this.provider = "gemini";
+    }
+
     this.config = {
       enableCaching: true,
       defaultSystemPrompt: "You are a helpful fashion AI assistant.",
@@ -43,6 +74,7 @@ export class AIService {
     };
 
     logger.info("AIService initialized", {
+      provider: this.provider,
       enableCaching: this.config.enableCaching,
       defaultSystemPrompt: this.config.defaultSystemPrompt,
     });
@@ -83,7 +115,7 @@ export class AIService {
             context,
             prompt,
             async (message, ctx, sysPrompt) => {
-              const result = await this.geminiApi.generateRAGResponse(message, ctx, sysPrompt, {
+              const result = await this.api.generateRAGResponse(message, ctx, sysPrompt, {
                 includeMetadata: true,
               });
 
@@ -92,6 +124,7 @@ export class AIService {
               }
 
               logger.info("AI response generated", {
+                provider: this.provider,
                 responseLength: result.data.response.length,
                 metadata: result.data.metadata,
                 requestCount: this.requestCount,
@@ -103,7 +136,7 @@ export class AIService {
         }
 
         // Direct call without caching
-        const result = await this.geminiApi.generateRAGResponse(userMessage, context, prompt, {
+        const result = await this.api.generateRAGResponse(userMessage, context, prompt, {
           includeMetadata: true,
         });
 
@@ -112,6 +145,7 @@ export class AIService {
         }
 
         logger.info("AI response generated", {
+          provider: this.provider,
           responseLength: result.data.response.length,
           metadata: result.data.metadata,
           requestCount: this.requestCount,
@@ -148,13 +182,13 @@ export class AIService {
         if (this.config.enableCaching) {
           // Use centralized cache utility
           return await getCachedTokenCount(text, async (text) => {
-            const result = await this.geminiApi.countTokens(text);
+            const result = await this.api.countTokens(text);
             return result.success ? result.data || 0 : 0;
           });
         }
 
         // Direct call without caching
-        const result = await this.geminiApi.countTokens(text);
+        const result = await this.api.countTokens(text);
         return result.success ? result.data || 0 : 0;
       },
       "count tokens",
@@ -172,7 +206,7 @@ export class AIService {
   async healthCheck(): Promise<AIHealthCheckResult> {
     return handleAsyncOperationStrict(
       async () => {
-        const result = await this.geminiApi.healthCheck();
+        const result = await this.api.healthCheck();
         const cacheStats = getCacheStats();
 
         return {
@@ -199,7 +233,15 @@ export class AIService {
    * @returns GeminiApiIntegration instance
    */
   get gemini(): GeminiApiIntegration {
-    return this.geminiApi;
+    if (this.api instanceof GeminiApiIntegration) return this.api;
+    return geminiApi;
+  }
+
+  /**
+   * Get current AI provider name
+   */
+  getProvider(): AIProvider {
+    return this.provider;
   }
 
   /**
