@@ -42,7 +42,7 @@ export const supabaseAdmin: SupabaseClient = createClient(
 /**
  * Test Supabase connection
  */
-export const testSupabaseConnection = async (): Promise<void> => {
+export const testSupabaseConnection = async (): Promise<boolean> => {
   try {
     // Test connection by querying a real table that we know exists
     const { error } = await supabaseAdmin.from("agents").select("id").limit(1);
@@ -63,6 +63,7 @@ export const testSupabaseConnection = async (): Promise<void> => {
     }
 
     logger.info("Supabase connection test successful");
+    return true;
   } catch (error) {
     const errorCode =
       error instanceof Error && "code" in error
@@ -77,6 +78,7 @@ export const testSupabaseConnection = async (): Promise<void> => {
 
     // Don't throw - allow server to start even if Supabase is not configured yet
     logger.warn("Server starting without Supabase connection");
+    return false;
   }
 };
 

@@ -23,7 +23,7 @@ import { storageService } from "./services/storage.service";
 /**
  * Server port configuration
  */
-const PORT = 3001;
+const PORT = parseInt(process.env.PORT || "3001", 10);
 
 /**
  * Initialize all services
@@ -37,8 +37,12 @@ const initializeServices = async (): Promise<void> => {
   try {
     // Test Supabase connection
     logger.info("Testing Supabase connection...");
-    await testSupabaseConnection();
-    logger.info("Supabase connection successful");
+    const isSupabaseConnected = await testSupabaseConnection();
+    if (isSupabaseConnected) {
+      logger.info("Supabase connection successful");
+    } else {
+      logger.warn("Supabase connection unavailable; continuing with limited functionality");
+    }
 
     // Initialize Pinecone
     logger.info("Initializing Pinecone vector database...");
@@ -57,10 +61,14 @@ const initializeServices = async (): Promise<void> => {
       logger.info("Supabase Storage connection successful");
     }
 
-    // Start background jobs
-    logger.info("Starting background jobs...");
-    startJobs();
-    logger.info("Background jobs started");
+    if (isSupabaseConnected) {
+      // Start background jobs only when the backing datastore is reachable.
+      logger.info("Starting background jobs...");
+      startJobs();
+      logger.info("Background jobs started");
+    } else {
+      logger.warn("Skipping background jobs because Supabase is unavailable");
+    }
 
     logger.info("All services initialized successfully");
   } catch (error) {
@@ -87,7 +95,7 @@ const startServer = async (): Promise<http.Server> => {
     await initializeServices();
 
     // Start listening on port 3001
-    server.listen(3001, () => {
+    server.listen(PORT, () => {
       logger.info(`🚀 Server is running on port ${PORT}`, {
         port: PORT,
         environment: process.env.NODE_ENV || "development",
@@ -97,7 +105,7 @@ const startServer = async (): Promise<http.Server> => {
 
       if (process.env.NODE_ENV === "development") {
         logger.info(`📡 API available at: http://localhost:${PORT}/api`);
-        logger.info(`💚 Health check: http://localhost:${PORT}/health`);
+        logger.info(`💚 Health check: http://localhost:${PORT}/api/health`);
       }
     });
 

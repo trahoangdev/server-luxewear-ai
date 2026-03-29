@@ -3,6 +3,7 @@ node_modules/
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+logs/
 
 # Environment variables
 .env
@@ -53,4 +54,3 @@ temp/
 .eslintcache
 *.cache
 
-*.md
