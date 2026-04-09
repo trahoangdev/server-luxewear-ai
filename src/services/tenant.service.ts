@@ -451,9 +451,12 @@ export class TenantService {
 
       return (userTenants || []).map((ut: UserTenantRPCResult) => ({
         id: ut.id,
+        tenant_id: ut.tenant?.id,
         tenant: ut.tenant,
         role: ut.role as TenantRole,
-        joinedAt: ut.created_at,
+        joined_at: ut.created_at,
+        created_at: ut.created_at,
+        updated_at: ut.created_at,
       }));
     } catch (error) {
       logger.error("Get user tenants service error", {
