@@ -143,7 +143,7 @@ export class TenantController {
           res,
           {
             tenants: memberships.map((membership) => ({
-              id: membership.tenant_id,
+              id: membership.tenant_id || membership.tenant?.id,
               name: membership.tenant?.name || "Unknown",
               plan: membership.tenant?.plan || "free",
               status: membership.tenant?.status || "active",
